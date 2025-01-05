@@ -7,14 +7,13 @@ import paho.mqtt.client as mqtt
 from json import dumps
 
 # ----- Load configuration from environment variables -----
-I2C_ADDR_PRIMARY = int(getenv("I2C_PRIMARY", 0x76))
-I2C_ADDR_SECONDARY = int(getenv("I2C_SECONDARY", 0x76))
-POLL_TIME = int(getenv("POLL_TIME", 60))
-MQTT_PORT = int(getenv("MQTT_PORT", 1883))
+I2C_ADDR_PRIMARY = int(getenv("I2C_ADDR", 0x76))
 MQTT_ADDR = str(getenv("MQTT_ADDR", "127.0.0.1"))
+MQTT_PORT = int(getenv("MQTT_PORT", 1883))
 MQTT_TOPIC = str(getenv("MQTT_TOPIC", "bme680"))
-DISCOVERY_PREFIX = str(getenv("DISCOVERY_PREFIX", "homeassistant"))
-DISCOVERY_DEVICE_ID = str(getenv("DISCOVERY_DEVICE_ID", "bme680"))
+POLL_TIME = int(getenv("POLL_TIME", 60))
+DISCOVERY_TOPIC = str(getenv("DISCOVERY_PREFIX", "homeassistant"))
+DEVICE_ID = str(getenv("DISCOVERY_DEVICE_ID", "bme680"))
 
 print("===================================================")
 print("|==============     BME680-MQTT     ==============|")
@@ -43,10 +42,10 @@ def readData(sensor:bme680.BME680) -> str:
 def sendDiscoveryMessage(client:mqtt.Client) -> None:
     discoveryMessage = {
         "device"        :       {
-            "name"      :       DISCOVERY_DEVICE_ID.upper(),
+            "name"      :       DEVICE_ID.upper(),
             "mf"        :       "Bosch",
             "mdl"       :       "BME680",
-            "ids"       :       f"BME680_{DISCOVERY_DEVICE_ID}"
+            "ids"       :       f"BME680_{DEVICE_ID}"
         },
         "origin"        :       {
             "name"      :       "bme680-mqtt",
@@ -61,7 +60,7 @@ def sendDiscoveryMessage(client:mqtt.Client) -> None:
                 "unit_of_measurement" : "°C",
                 "suggested_display_precision" : 2,
                 "value_template":   "{{ value_json.temperature.celcius }}",
-                "unique_id"     :   f"{DISCOVERY_DEVICE_ID}_temperature_celcius"
+                "unique_id"     :   f"{DEVICE_ID}_temperature_celcius"
             },
             "temperature_farenheit":      {
                 "name"          :   "Temperature °F",
@@ -70,7 +69,7 @@ def sendDiscoveryMessage(client:mqtt.Client) -> None:
                 "unit_of_measurement" : "°F",
                 "suggested_display_precision" : 2,
                 "value_template":   "{{ value_json.temperature.fahrenheit }}",
-                "unique_id"     :   f"{DISCOVERY_DEVICE_ID}_temperature_fahrenheit"
+                "unique_id"     :   f"{DEVICE_ID}_temperature_fahrenheit"
             },
             "pressure"          :      {
                 "name"          :   "Pressure",
@@ -79,7 +78,7 @@ def sendDiscoveryMessage(client:mqtt.Client) -> None:
                 "unit_of_measurement" : "hPa",
                 "suggested_display_precision" : 1,
                 "value_template":   "{{ value_json.pressure.pressure }}",
-                "unique_id"     :   f"{DISCOVERY_DEVICE_ID}_pressure"
+                "unique_id"     :   f"{DEVICE_ID}_pressure"
             },
             "humidity"          :      {
                 "name"          :   "Humidity",
@@ -88,7 +87,7 @@ def sendDiscoveryMessage(client:mqtt.Client) -> None:
                 "unit_of_measurement" : "%",
                 "suggested_display_precision" : 2,
                 "value_template":   "{{ value_json.humidity.humidity }}",
-                "unique_id"     :   f"{DISCOVERY_DEVICE_ID}_humidity"
+                "unique_id"     :   f"{DEVICE_ID}_humidity"
             },
             "air_quality"       :       {
                 "name"          :   "Air Quality",
@@ -97,19 +96,21 @@ def sendDiscoveryMessage(client:mqtt.Client) -> None:
                 "unit_of_measurement" : None,
                 "suggested_display_precision" : 0,
                 "value_template":   "{{ value_json.airQuality.resistance }}",
-                "unique_id"     :   f"{DISCOVERY_DEVICE_ID}_air_quality"
+                "unique_id"     :   f"{DEVICE_ID}_air_quality"
             }},
         "state_topic"   :       MQTT_TOPIC
     }
 
-    client.publish(topic=f"{DISCOVERY_PREFIX}/device/{DISCOVERY_DEVICE_ID}/config", payload=dumps(discoveryMessage), retain=True)
+    client.publish(topic=f"{DISCOVERY_TOPIC}/device/{DEVICE_ID}/config", payload=dumps(discoveryMessage), retain=True)
+
+# ----- Main -----
 
 client = mqtt.Client()
 
 try:
     sensor = bme680.BME680(I2C_ADDR_PRIMARY)
-except (RuntimeError, IOError):
-    sensor = bme680.BME680(I2C_ADDR_SECONDARY)
+except:
+    raise OSError(f"Failed to open i2c device at address '{I2C_ADDR_PRIMARY}'. Check the I2C_ADDR_PRIMARY environment variable. ")
 
 try:
     client.connect(MQTT_ADDR, MQTT_PORT)
