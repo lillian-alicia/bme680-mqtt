@@ -108,12 +108,6 @@ This docker image sends the following discovery message, which adds all of the d
 
 This docker image is designed to have user-friendly customisation. All of the necessary options are set using environment variables, and default to sane values.
 
-> [!IMPORTANT]
-> This project currently uses a synchronus (ie, not async) connection to the MQTT broker. This means that currently, long poll times cause undefined behaviour, and may cause issues when sending sensor data.
-> **IT IS RECOMMENDED TO USE A `POLL_TIME` VALUE OF 60s OR LESS UNTIL THIS ISSUE IS RESOLVED.**
->
-> See [this issue](https://github.com/lillian-alicia/bme680-mqtt/issues/1) for updates.
-
 - `I2C_ADDR` - The i2c address of the BME680 sensor. **Defaults to 0x76**, the standard address for i2C devices.
 - `MQTT_ADDR` - (**Mandatory**) The IP address or hostname for the MQTT broker (see [MQTT Broker](README.md#mqtt-broker) for more information.)
 - `MQTT_PORT` - The port that the MQTT broker communicates on. **Defaults to 1883**, the default port used for MQTT.
