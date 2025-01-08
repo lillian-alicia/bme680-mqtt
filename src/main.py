@@ -1,10 +1,13 @@
 # ----- Import -----
+import asyncio
 import bme680
-from time import sleep
+import aiomqtt as mqtt
+from json import dumps
 from os import getenv
 from sys import stderr
-import paho.mqtt.client as mqtt
-from json import dumps
+
+# ----- Software Version (used in discovery)
+SW_VERSION = 1.1
 
 # ----- Load configuration from environment variables -----
 I2C_ADDR_PRIMARY = int(getenv("I2C_ADDR", 0x76))
@@ -19,7 +22,6 @@ print("===================================================")
 print("|==============     BME680-MQTT     ==============|")
 print("|====  github.com/lillian-alicia/bme680-mqtt  ====|")
 print("===================================================")
-
 # ----- Subprograms -----
 
 def readData(sensor:bme680.BME680) -> str:
@@ -38,8 +40,8 @@ def readData(sensor:bme680.BME680) -> str:
                 "airQuality"        :       {
                     "resistance"    :       sensor.data.gas_resistance}
             })
-
-def sendDiscoveryMessage(client:mqtt.Client) -> None:
+            
+def discoveryMessage() -> str:
     discoveryMessage = {
         "device"        :       {
             "name"      :       DEVICE_ID.upper(),
@@ -50,7 +52,7 @@ def sendDiscoveryMessage(client:mqtt.Client) -> None:
         "origin"        :       {
             "name"      :       "bme680-mqtt",
             "url"       :       "https://github.com/lillian-alicia/bme680-mqtt",
-            "sw"        :       "1.0"
+            "sw"        :       SW_VERSION
         },
         "components"    :       {
             "temperature_celcius":      {
@@ -101,39 +103,50 @@ def sendDiscoveryMessage(client:mqtt.Client) -> None:
         "state_topic"   :       MQTT_TOPIC
     }
 
-    client.publish(topic=f"{DISCOVERY_TOPIC}/device/{DEVICE_ID}/config", payload=dumps(discoveryMessage), retain=True)
+    return dumps(discoveryMessage)
+
+def initSensor() -> bme680.BME680:
+    try:
+        sensor = bme680.BME680(I2C_ADDR_PRIMARY)
+    except:
+        raise OSError(f"Failed to open i2c device at address '{I2C_ADDR_PRIMARY}'. Check the I2C_ADDR_PRIMARY environment variable.")
+
+    # Sensor configuration from pimoroni's examples:
+    # https://github.com/pimoroni/bme680-python
+
+    sensor.set_humidity_oversample(bme680.OS_2X)
+    sensor.set_pressure_oversample(bme680.OS_4X)
+    sensor.set_temperature_oversample(bme680.OS_8X)
+    sensor.set_filter(bme680.FILTER_SIZE_3)
+    sensor.set_gas_status(bme680.ENABLE_GAS_MEAS)
+
+    sensor.set_gas_heater_temperature(320)
+    sensor.set_gas_heater_duration(150)
+    sensor.select_gas_heater_profile(0)
+
+    return sensor
 
 # ----- Main -----
+async def main():
+    SENSOR = initSensor()
+    client = mqtt.Client(hostname=MQTT_ADDR, port=MQTT_PORT)
 
-client = mqtt.Client()
+    # ----- HomeAssistant Discovery
+    try:
+        async with client:
+            await client.publish(topic=DISCOVERY_TOPIC, payload=discoveryMessage(), qos=2)
+    except mqtt.MqttError as exception:
+        print(f"Failed to send discovery message to '{DISCOVERY_TOPIC}' at {client._hostname}:{client._port} \n{exception}", file=stderr)
 
-try:
-    sensor = bme680.BME680(I2C_ADDR_PRIMARY)
-except:
-    raise OSError(f"Failed to open i2c device at address '{I2C_ADDR_PRIMARY}'. Check the I2C_ADDR_PRIMARY environment variable. ")
-
-try:
-    client.connect(MQTT_ADDR, MQTT_PORT)
-except Exception as error:
-    print(f"Failed to connect to the MQTT server at {MQTT_ADDR}:{MQTT_PORT}.", file=stderr)
-    print(error)
-
-# Sensor configuration from pimoroni's examples:
-# https://github.com/pimoroni/bme680-python
-
-sensor.set_humidity_oversample(bme680.OS_2X)
-sensor.set_pressure_oversample(bme680.OS_4X)
-sensor.set_temperature_oversample(bme680.OS_8X)
-sensor.set_filter(bme680.FILTER_SIZE_3)
-sensor.set_gas_status(bme680.ENABLE_GAS_MEAS)
-
-sensor.set_gas_heater_temperature(320)
-sensor.set_gas_heater_duration(150)
-sensor.select_gas_heater_profile(0)
-
-sendDiscoveryMessage(client)
-
-while True:
-    mqttData = readData(sensor)
-    client.publish(topic=MQTT_TOPIC, payload=mqttData)
-    sleep(POLL_TIME)
+    # ----- Main Loop -----
+    while True:
+        try:
+            sensorData = readData(sensor=SENSOR)
+            async with client:
+                await client.publish(topic=MQTT_TOPIC, payload=sensorData, qos=2, timeout=5) # QOS 2 requests a delivery receipt, timeout will give up after 5 seconds.
+        except mqtt.MqttError as exception:
+            print(f"Publishing to {MQTT_TOPIC} failed, reconnecting in 30s.", file=stderr)
+            print(f"More info: {exception}", file=stderr)
+            await asyncio.sleep(30)
+        await asyncio.sleep(POLL_TIME)
+asyncio.run(main())
