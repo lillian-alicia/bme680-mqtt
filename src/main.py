@@ -7,7 +7,7 @@ from os import getenv
 from sys import stderr
 
 # ----- Software Version (used in discovery)
-SW_VERSION = 1.1
+SW_VERSION = "1.1.1"
 
 # ----- Load configuration from environment variables -----
 I2C_ADDR_PRIMARY = int(getenv("I2C_ADDR", 0x76))
@@ -134,7 +134,8 @@ async def main():
     # ----- HomeAssistant Discovery
     try:
         async with client:
-            await client.publish(topic=DISCOVERY_TOPIC, payload=discoveryMessage(), qos=2)
+            discoveryTopic = f"{DISCOVERY_TOPIC}/device/{DEVICE_ID}/config"
+            await client.publish(topic=discoveryTopic, payload=discoveryMessage(), qos=2)
     except mqtt.MqttError as exception:
         print(f"Failed to send discovery message to '{DISCOVERY_TOPIC}' at {client._hostname}:{client._port} \n{exception}", file=stderr)
 
