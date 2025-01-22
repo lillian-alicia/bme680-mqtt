@@ -8,7 +8,7 @@ from os import getenv
 from sys import stderr
 
 # ----- Software Version (used in discovery)
-SW_VERSION = "1.1.1"
+SW_VERSION = "1.2"
 
 # ----- Load configuration from environment variables -----
 # Sensor Config
