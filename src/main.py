@@ -40,7 +40,7 @@ def parseAuth(authData:str) -> dict[str, str] | None:
             return {    "username"  :   str(getenv("MQTT_USERNAME", "username")),
                         "password"  :   str(getenv("MQTT_PASSWORD", "password"))    }
         case "file":
-            with open("/bme680/auth", "r") as f:
+            with open("/bme680-mqtt/auth", "r") as f:
                 return load(f)
         case _: # else:
             raise ValueError(f"MQTT_AUTH_MODE must be one of 'none', 'env', or 'file', not '{MQTT_AUTH_MODE}'.")
