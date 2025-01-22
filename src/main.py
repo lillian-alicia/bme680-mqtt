@@ -3,6 +3,7 @@ import asyncio
 import bme680
 import aiomqtt as mqtt
 from json import dumps, load
+from json import dumps, load
 from os import getenv
 from sys import stderr
 
@@ -151,9 +152,9 @@ async def main():
     SENSOR = initSensor()
     auth = parseAuth(MQTT_AUTH_MODE)
     if auth == None:
-        client = mqtt.Client(hostname=MQTT_ADDR, port=MQTT_PORT) # Connect with no authentication details
+        client = mqtt.Client(hostname=MQTT_ADDR, port=MQTT_PORT, identifier=f"BME680_{DEVICE_ID}") # Connect with no authentication details
     else:
-        client = mqtt.Client(hostname=MQTT_ADDR, port=MQTT_PORT, username=auth["username"], password=auth["password"])
+        client = mqtt.Client(hostname=MQTT_ADDR, port=MQTT_PORT, username=auth["username"], password=auth["password"], identifier=f"BME680_{DEVICE_ID}")
 
     # ----- HomeAssistant Discovery
     try:

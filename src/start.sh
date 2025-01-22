@@ -4,5 +4,5 @@
 source /bme680-mqtt/.venv/bin/activate
 
 # Run python script
-python3 main.py
+python3 -u main.py
 
