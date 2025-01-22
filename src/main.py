@@ -2,27 +2,47 @@
 import asyncio
 import bme680
 import aiomqtt as mqtt
-from json import dumps
+from json import dumps, load
 from os import getenv
 from sys import stderr
 
 # ----- Software Version (used in discovery)
-SW_VERSION = "1.1.1"
+SW_VERSION = "1.2"
 
 # ----- Load configuration from environment variables -----
-I2C_ADDR_PRIMARY = int(getenv("I2C_ADDR", 0x76))
+# Sensor Config
+I2C_ADDR = int(getenv("I2C_ADDR", 0x76))
+POLL_TIME = int(getenv("POLL_TIME", 60))
+
+# MQTT Broker Config
 MQTT_ADDR = str(getenv("MQTT_ADDR", "127.0.0.1"))
 MQTT_PORT = int(getenv("MQTT_PORT", 1883))
+MQTT_AUTH_MODE = str(getenv("MQTT_AUTH_MODE", "none")) # Can be "none" (no auth needed), "env" (auth details in environment vars), or "file" (auth details in file at "/bme680/auth")
+
+# MQTT Topics Config
 MQTT_TOPIC = str(getenv("MQTT_TOPIC", "bme680"))
-POLL_TIME = int(getenv("POLL_TIME", 60))
 DISCOVERY_TOPIC = str(getenv("DISCOVERY_PREFIX", "homeassistant"))
 DEVICE_ID = str(getenv("DISCOVERY_DEVICE_ID", "bme680"))
 
-print("===================================================")
-print("|==============     BME680-MQTT     ==============|")
-print("|====  github.com/lillian-alicia/bme680-mqtt  ====|")
-print("===================================================")
+print("""
+|=================================================|
+|==============     BME680-MQTT     ==============|
+|====  github.com/lillian-alicia/bme680-mqtt  ====|
+===================================================""")
 # ----- Subprograms -----
+
+def parseAuth(authData:str) -> dict[str, str] | None:
+    match authData:
+        case "none":
+            return None
+        case "env":
+            return {    "username"  :   str(getenv("MQTT_USERNAME", "username")),
+                        "password"  :   str(getenv("MQTT_PASSWORD", "password"))    }
+        case "file":
+            with open("/bme680-mqtt/auth", "r") as f:
+                return load(f)
+        case _: # else:
+            raise ValueError(f"MQTT_AUTH_MODE must be one of 'none', 'env', or 'file', not '{MQTT_AUTH_MODE}'.")
 
 def readData(sensor:bme680.BME680) -> str:
     sensor.get_sensor_data() # Pulls new data from the sensor
@@ -107,9 +127,9 @@ def discoveryMessage() -> str:
 
 def initSensor() -> bme680.BME680:
     try:
-        sensor = bme680.BME680(I2C_ADDR_PRIMARY)
+        sensor = bme680.BME680(I2C_ADDR)
     except:
-        raise OSError(f"Failed to open i2c device at address '{I2C_ADDR_PRIMARY}'. Check the I2C_ADDR_PRIMARY environment variable.")
+        raise OSError(f"Failed to open i2c device at address '{I2C_ADDR}'. Check the I2C_ADDR_PRIMARY environment variable.")
 
     # Sensor configuration from pimoroni's examples:
     # https://github.com/pimoroni/bme680-python
@@ -129,7 +149,11 @@ def initSensor() -> bme680.BME680:
 # ----- Main -----
 async def main():
     SENSOR = initSensor()
-    client = mqtt.Client(hostname=MQTT_ADDR, port=MQTT_PORT)
+    auth = parseAuth(MQTT_AUTH_MODE)
+    if auth == None:
+        client = mqtt.Client(hostname=MQTT_ADDR, port=MQTT_PORT, identifier=f"BME680_{DEVICE_ID}") # Connect with no authentication details
+    else:
+        client = mqtt.Client(hostname=MQTT_ADDR, port=MQTT_PORT, username=auth["username"], password=auth["password"], identifier=f"BME680_{DEVICE_ID}")
 
     # ----- HomeAssistant Discovery
     try:
