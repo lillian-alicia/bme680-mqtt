@@ -12,7 +12,7 @@ SW_VERSION = "1.1.1"
 
 # ----- Load configuration from environment variables -----
 # Sensor Config
-I2C_ADDR_PRIMARY = int(getenv("I2C_ADDR", 0x76))
+I2C_ADDR = int(getenv("I2C_ADDR", 0x76))
 POLL_TIME = int(getenv("POLL_TIME", 60))
 
 # MQTT Broker Config
@@ -128,9 +128,9 @@ def discoveryMessage() -> str:
 
 def initSensor() -> bme680.BME680:
     try:
-        sensor = bme680.BME680(I2C_ADDR_PRIMARY)
+        sensor = bme680.BME680(I2C_ADDR)
     except:
-        raise OSError(f"Failed to open i2c device at address '{I2C_ADDR_PRIMARY}'. Check the I2C_ADDR_PRIMARY environment variable.")
+        raise OSError(f"Failed to open i2c device at address '{I2C_ADDR}'. Check the I2C_ADDR_PRIMARY environment variable.")
 
     # Sensor configuration from pimoroni's examples:
     # https://github.com/pimoroni/bme680-python
