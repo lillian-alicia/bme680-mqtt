@@ -3,7 +3,6 @@ import asyncio
 import bme680
 import aiomqtt as mqtt
 from json import dumps, load
-from json import dumps, load
 from os import getenv
 from sys import stderr
 
